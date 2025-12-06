@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <div class="login-centered">
+    <div class="login-card-centered card">
+      <div class="login-card-inner">
+        <h2>Sign In</h2>
+        {% if error %}
+          <div class="error">{{ error }}</div>
+        {% endif %}
+        <form method="post" action="/login" class="login-form">
+          <label>Email</label>
+          <input type="email" name="email" placeholder="you@example.com" required />
+
+          <label>Password</label>
+          <input type="password" name="password" placeholder="Password" required />
+
+          <div class="form-actions">
+            <button class="btn primary" type="submit">Sign In</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+{% endblock %}

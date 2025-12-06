@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <form class="entry-form" method="post" action="{% if entry %}/edit/{{ entry.id }}{% else %}/new{% endif %}">
+    <label>Title</label>
+    <input name="title" type="text" placeholder="Entry title" value="{{ entry.title if entry else '' }}" />
+
+    <label>Content</label>
+    <textarea name="content" rows="8" placeholder="Write your thoughts...">{{ entry.content if entry else '' }}</textarea>
+
+    <div class="form-actions">
+      <button class="btn primary" type="submit">Save Entry</button>
+      <a class="btn" href="/">Cancel</a>
+    </div>
+  </form>
+{% endblock %}

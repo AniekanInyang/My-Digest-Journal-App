@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>My Digest</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="site-header">
+        <h1><a href="/">My Digest</a></h1>
+        {% if session.get('user') and request.endpoint != 'login' %}
+          <div class="header-actions">
+            {% if session.get('user').get('name') %}
+              <span class="user-name">{{ session.get('user')['name'] }}</span>
+            {% else %}
+              <span class="user-name">{{ session.get('user')['email'].split('@')[0].title() }}</span>
+            {% endif %}
+            <a class="btn logout" href="/logout">Logout</a>
+          </div>
+        {% endif %}
+      </header>
+
+      <div class="card">
+        {% block content %}{% endblock %}
+      </div>
+
+      <div style="height:68px"></div>
+      <div class="site-footer">
+        <p>Made with ❤️ </p>
+      </div>
+    </div>
+  </body>
+</html>
