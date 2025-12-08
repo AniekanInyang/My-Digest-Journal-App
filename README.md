@@ -4,7 +4,7 @@ Personal journal web app that analyzes and summarizes user's entries
 ### For the initial setup
 - Clone git repo
 - CD to repo directory
-- >>> python3 install -r requirements.txt
+- Run `python3 install -r requirements.txt` in the terminal 
 - Create .env file
 - Set test user credentials in the .env file  
     TEST_EMAIL=''    
@@ -13,5 +13,5 @@ Personal journal web app that analyzes and summarizes user's entries
 
 ### To run app
 - CD to repo directory
-- >>> python3 app.py
-- >>> Open http://127.0.0.1:5000 in browser
+- Run `python3 app.py` in the terrminal
+- Open http://127.0.0.1:5000 in browser
