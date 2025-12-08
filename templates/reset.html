@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <div class="login-centered">
+    <div class="login-card-centered card">
+      <div class="login-card-inner">
+        <h2>Reset password</h2>
+        {% if error %}<div class="error">{{ error }}</div>{% endif %}
+        <form method="post" action="" class="login-form">
+          <label>New password</label>
+          <input type="password" name="password" required />
+          <div class="form-actions">
+            <button class="btn primary" type="submit">Set new password</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+{% endblock %}

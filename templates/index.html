@@ -5,6 +5,7 @@
 
   <section class="entries">
       <div style="height:48px"></div>
+  <div style="margin-bottom:12px;text-align:center;color:#6a4fbf;font-size:30px;font-style:italic;font-weight:600;letter-spacing:0.6px;font-family:Georgia, 'Times New Roman', serif">Hi {{ session.user.name.split(' ')[0] if session.user and session.user.name else 'there' }},</div>
       <div class="quick-entry-form">
         <div class="quick-entry-form-inner" role="button" tabindex="0" onclick="location.href='/new'" onkeydown="if(event.key==='Enter'){ location.href='/new'; }">
           <textarea name="content" class="quick-textarea" placeholder="What's on your mind?" readonly></textarea>

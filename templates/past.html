@@ -30,29 +30,28 @@
       <div class="bulk-actions" style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px">
         <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="select-all-past" /> Select all</label>
         <div>
-          <button id="bulk-delete-btn" class="btn" type="button" style="display:none" disabled>Delete selected</button>
+          <button id="bulk-summarize-btn" class="btn" type="button" style="display:none;font-size:14px;padding:8px 12px" disabled>Summarize</button>
+          <button id="bulk-delete-btn" class="btn" type="button" style="display:none;font-size:14px;padding:8px 12px" disabled>Delete selected</button>
         </div>
       </div>
       {% if entries %}
         {% for e in entries %}
-          <article class="entry">
+      <article class="entry">
             <div class="entry-row">
-              <input type="checkbox" name="selected" value="{{ e.id }}" class="select-checkbox" />
+        <input type="checkbox" name="selected" value="{{ e.id }}" class="select-checkbox" {% if session.selected_ids and (e.id|string) in session.selected_ids %}checked{% endif %} />
               <div class="entry-main">
                 <div class="entry-header">
                   <h2>{{ e.title or 'Untitled' }}</h2>
                   <div class="entry-controls">
                     <a href="/edit/{{ e.id }}" class="btn" title="Edit">✎</a>
-                    <form action="/delete/{{ e.id }}" method="post" class="delete-form-inline" onsubmit="return confirm('Delete this entry?');" style="display:inline">
-                      <button type="submit" class="btn btn-delete" aria-label="Delete">
-                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                          <path d="M3 6h18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                          <path d="M8 6v12a2 2 0 002 2h4a2 2 0 002-2V6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                          <path d="M10 11v6M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                          <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                        </svg>
-                      </button>
-                    </form>
+                    <button type="button" class="btn btn-delete js-entry-delete" data-delete-id="{{ e.id }}" title="Delete" aria-label="Delete">
+                      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <path d="M3 6h18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        <path d="M8 6v12a2 2 0 002 2h4a2 2 0 002-2V6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        <path d="M10 11v6M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                      </svg>
+                    </button>
                   </div>
                 </div>
                 <time>{{ e.display_time or e.created_at }}</time>
@@ -91,6 +90,7 @@
       // bulk select logic
       const selectAll = document.getElementById('select-all-past');
       const bulkBtn = document.getElementById('bulk-delete-btn');
+      const summarizeBtn = document.getElementById('bulk-summarize-btn');
       const bulkForm = document.getElementById('bulk-form');
       const bulkModal = document.getElementById('bulk-confirm');
       const bulkYes = document.getElementById('bulk-confirm-yes');
@@ -100,6 +100,7 @@
         let any = false;
         boxes.forEach(b => { if(b.checked) any = true; });
         if(bulkBtn){ bulkBtn.disabled = !any; bulkBtn.style.display = any ? 'inline-block' : 'none'; }
+        if(summarizeBtn){ summarizeBtn.disabled = !any; summarizeBtn.style.display = any ? 'inline-block' : 'none'; }
       }
       if(selectAll){
         selectAll.addEventListener('change', ()=>{
@@ -117,8 +118,28 @@
           if(bulkModal) bulkModal.style.display = 'flex';
         });
       }
+      // summarize selected when clicked (no confirm needed)
+      if(summarizeBtn){
+        summarizeBtn.addEventListener('click', ()=>{
+          if(summarizeBtn.disabled) return;
+          // submit the form to the summarize endpoint
+          bulkForm.action = '/summarize';
+          bulkForm.submit();
+        });
+      }
       if(bulkNo) bulkNo.addEventListener('click', ()=>{ if(bulkModal) bulkModal.style.display = 'none'; });
       if(bulkYes) bulkYes.addEventListener('click', ()=>{ if(bulkForm) bulkForm.submit(); });
+      // single-entry delete via fetch to avoid nested forms interfering with bulk form
+      document.addEventListener('click', (e)=>{
+        const btn = e.target.closest && e.target.closest('.js-entry-delete');
+        if(!btn) return;
+        const id = btn.getAttribute('data-delete-id');
+        if(!id) return;
+        if(!confirm('Delete this entry?')) return;
+        fetch(`/delete/${id}`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' } })
+          .then(r => { if(r.ok) location.reload(); else alert('Delete failed'); })
+          .catch(()=> alert('Delete failed'));
+      });
     })();
   </script>
 {% endblock %}

@@ -81,7 +81,7 @@ html, body { height: 100%; }
 .modal-inner{background:var(--card);padding:20px;border-radius:12px;min-width:260px;text-align:center;box-shadow:0 12px 36px rgba(88,64,160,0.12)}
 .modal .btn{margin-top:12px}
 
-.entry-form input, .entry-form textarea{width:100%;padding:12px;border-radius:12px;border:1px solid #efe6f6;margin-bottom:12px;background:rgba(230,220,245,0.5)}
+.entry-form input, .entry-form textarea{width:100%;padding:12px;border-radius:12px;border:1px solid #efe6f6;margin-bottom:12px;background:var(--card)}
 .form-actions{display:flex;gap:10px}
 .btn{background:transparent;border:1px solid var(--purple);color:var(--purple);padding:10px 14px;border-radius:12px;text-decoration:none}
 .btn.primary{background:linear-gradient(90deg,var(--primary),var(--deep));color:var(--card);border-color:transparent}

@@ -1,2 +1,7 @@
 flask
 python-dotenv>=1.0.0
+werkzeug
+
+# Optional (for production):
+# bcrypt
+# Flask-WTF
