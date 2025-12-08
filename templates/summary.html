@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <section style="max-width:760px;margin:0 auto;position:relative">
+  <a class="btn" style="position:absolute;left:0;top:0" href="{{ request.referrer or url_for('past_entries') }}">Back</a>
+    <h2 style="margin-top:36px">Here's what your journal entries tell you...</h2>
+
+    <div style="position:relative;">
+  <textarea id="summary-box" readonly style="width:100%;min-height:220px;padding:36px 16px 16px 16px;border:1px solid #eee;border-radius:8px;background:#fafafa;line-height:1.4">{{ summary or '' }}</textarea>
+      <button id="copy-summary" class="btn" type="button" title="Copy summary" aria-label="Copy summary" 
+        style="position:absolute;right:12px;top:12px;padding:8px;line-height:1;border-radius:6px;background:white;border:1px solid #eee">📋</button>
+      <span id="copy-feedback" style="position:absolute;right:12px;top:44px;font-size:12px;color:#444;visibility:hidden;background:rgba(255,255,255,0.95);padding:6px 8px;border-radius:6px;border:1px solid #eee">Copied to clipboard</span>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:24px">
+      <h3 style="margin:0">Original entries</h3>
+    </div>
+    <div class="original-entries" style="margin-top:12px">
+    {% for e in entries %}
+      <article class="entry summary-original-entry" style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <h3 style="margin:0">{{ e.title or 'Untitled' }}</h3>
+          <time>{{ e.display_time or e.created_at }}</time>
+        </div>
+        <div class="entry-content">{{ e.content }}</div>
+      </article>
+    {% endfor %}
+    </div>
+    <!-- pager below entries, right-aligned (inline, not block) -->
+    <div id="summary-pager" style="display:none;float:right;align-items:center;gap:8px;background:#f0f1f3;padding:6px;border-radius:6px;border:1px solid #e0e0e0;display:inline-flex;margin-top:6px;font-size:13px">
+      <button id="pager-prev" class="btn" type="button" style="padding:6px 8px;font-size:13px">Prev</button>
+      <span style="width:1px;height:20px;background:#d0d0d0;display:inline-block;margin:0 8px;vertical-align:middle"></span>
+      <span id="pager-info" style="padding:0 6px">Page 1</span>
+      <span style="width:1px;height:20px;background:#d0d0d0;display:inline-block;margin:0 8px;vertical-align:middle"></span>
+      <button id="pager-next" class="btn" type="button" style="padding:6px 8px;font-size:13px">Next</button>
+    </div>
+  </section>
+  <script>
+    (function(){
+      // copy to clipboard behavior
+      const copyBtn = document.getElementById('copy-summary');
+      const box = document.getElementById('summary-box');
+      if(copyBtn && box){
+        const feedback = document.getElementById('copy-feedback');
+        copyBtn.addEventListener('click', async ()=>{
+          try{
+            await navigator.clipboard.writeText(box.value || '');
+            if(feedback){ feedback.style.visibility = 'visible'; }
+            setTimeout(()=>{ if(feedback) feedback.style.visibility = 'hidden'; }, 1800);
+          }catch(e){
+            // fallback select
+            box.select();
+            document.execCommand('copy');
+            if(feedback){ feedback.style.visibility = 'visible'; }
+            setTimeout(()=>{ if(feedback) feedback.style.visibility = 'hidden'; }, 1800);
+          }
+        });
+      }
+
+      // Pagination for original entries in the summary view (3 per page)
+      const perPage = 3;
+      const originals = Array.from(document.querySelectorAll('.summary-original-entry'));
+      const pager = document.getElementById('summary-pager');
+      const info = document.getElementById('pager-info');
+      const prev = document.getElementById('pager-prev');
+      const next = document.getElementById('pager-next');
+      if(originals.length > perPage){
+        let page = 0;
+        const pages = Math.ceil(originals.length / perPage);
+        function showPage(p){
+          page = Math.max(0, Math.min(p, pages-1));
+          originals.forEach((el, i)=> el.style.display = (i >= page*perPage && i < (page+1)*perPage) ? '' : 'none');
+          info.textContent = `Page ${page+1} of ${pages}`;
+          if(pager) pager.style.display = 'flex';
+          if(prev) prev.disabled = page === 0;
+          if(next) next.disabled = page === pages-1;
+        }
+        showPage(0);
+        if(prev) prev.addEventListener('click', ()=> showPage(page-1));
+        if(next) next.addEventListener('click', ()=> showPage(page+1));
+      } else {
+        originals.forEach(el=> el.style.display = '');
+      }
+    })();
+  </script>
+{% endblock %}

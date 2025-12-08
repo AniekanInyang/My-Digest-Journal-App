@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <div class="login-centered">
+    <div class="login-card-centered card">
+      <div class="login-card-inner">
+        <h2>Forgot password</h2>
+        {% if info %}<div class="info">{{ info }}</div>{% endif %}
+        <form method="post" action="/forgot" class="login-form">
+          <label>Email</label>
+          <input type="email" name="email" required />
+          <div class="form-actions">
+            <button class="btn primary" type="submit">Send reset link</button>
+          </div>
+        </form>
+        <p style="margin-top:12px"><a href="/login">Back to sign in</a></p>
+      </div>
+    </div>
+  </div>
+{% endblock %}

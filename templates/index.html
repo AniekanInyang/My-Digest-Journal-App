@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <div style="height:12px"></div>
+
+  <section class="entries">
+      <div style="height:48px"></div>
+  <div style="margin-bottom:12px;text-align:center;color:#6a4fbf;font-size:30px;font-style:italic;font-weight:600;letter-spacing:0.6px;font-family:Georgia, 'Times New Roman', serif">Hi {{ session.user.name.split(' ')[0] if session.user and session.user.name else 'there' }},</div>
+      <div class="quick-entry-form">
+        <div class="quick-entry-form-inner" role="button" tabindex="0" onclick="location.href='/new'" onkeydown="if(event.key==='Enter'){ location.href='/new'; }">
+          <textarea name="content" class="quick-textarea" placeholder="What's on your mind?" readonly></textarea>
+          <div class="quick-actions">
+            <a href="/past" class="btn">See all entries</a>
+            <a href="/new" class="btn primary">New Entry</a>
+          </div>
+        </div>
+      </div>
+  <!-- recent entries removed from homepage; use /past to view and manage all entries -->
+  </section>
+  <!-- Saved modal -->
+  <div id="saved-modal" class="modal" style="display:none">
+    <div class="modal-inner">
+      <p>New journal entry saved</p>
+      <button id="saved-close" class="btn">OK</button>
+    </div>
+  </div>
+  {% if saved %}
+  <script>
+    (function(){
+      const modal = document.getElementById('saved-modal');
+      const close = document.getElementById('saved-close');
+      if(modal) modal.style.display = 'flex';
+      if(close) close.addEventListener('click', ()=>{ modal.style.display = 'none'; window.history.replaceState({}, document.title, window.location.pathname); });
+    })();
+  </script>
+  {% endif %}
+{% endblock %}

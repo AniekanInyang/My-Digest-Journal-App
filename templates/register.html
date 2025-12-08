@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <div class="login-centered">
+    <div class="login-card-centered card">
+      <div class="login-card-inner">
+        <h2>Create account</h2>
+        {% if error %}<div class="error">{{ error }}</div>{% endif %}
+        {% if success %}<div class="success">{{ success }}</div>{% endif %}
+        <form method="post" action="/register" class="login-form">
+          <label>Name</label>
+          <input type="text" name="name" required />
+          <label>Email</label>
+          <input type="email" name="email" required />
+          <label>Password</label>
+          <input type="password" name="password" required />
+          <div class="form-actions">
+            <button class="btn primary" type="submit">Create account</button>
+          </div>
+        </form>
+        <p style="margin-top:12px">Already have an account? <a href="/login">Sign in</a></p>
+      </div>
+    </div>
+  </div>
+{% endblock %}
