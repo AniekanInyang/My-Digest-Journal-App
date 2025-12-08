@@ -6,10 +6,10 @@ Personal journal web app that analyzes and summarizes user's entries
 - CD to repo directory
 - >>> python3 install -r requirements.txt
 - Create .env file
-- Set test user credentials in the .env file
-    TEST_EMAIL=''
-    TEST_PASSWORD=''
-    TEST_NAME=''
+- Set test user credentials in the .env file  
+    TEST_EMAIL=''    
+    TEST_PASSWORD=''    
+    TEST_NAME=''    
 
 ### To run app
 - CD to repo directory
