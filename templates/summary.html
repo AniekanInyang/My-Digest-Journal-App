@@ -5,6 +5,7 @@
   <a class="btn" style="position:absolute;left:0;top:0" href="{{ request.referrer or url_for('past_entries') }}">Back</a>
     <h2 style="margin-top:36px">Here's what your journal entries tell you...</h2>
 
+    <!-- Summary Box -->
     <div style="position:relative;">
   <textarea id="summary-box" readonly style="width:100%;min-height:220px;padding:36px 16px 16px 16px;border:1px solid #eee;border-radius:8px;background:#fafafa;line-height:1.4">{{ summary or '' }}</textarea>
       <button id="copy-summary" class="btn" type="button" title="Copy summary" aria-label="Copy summary" 
@@ -12,6 +13,41 @@
       <span id="copy-feedback" style="position:absolute;right:12px;top:44px;font-size:12px;color:#444;visibility:hidden;background:rgba(255,255,255,0.95);padding:6px 8px;border-radius:6px;border:1px solid #eee">Copied to clipboard</span>
     </div>
 
+    <!-- Sentiment & Insights -->
+    {% if sentiment or insights %}
+    <div style="margin-top:24px;padding:16px;background:#f9f9f9;border-radius:8px;border:1px solid #e8e8e8">
+      {% if sentiment %}
+      <div style="margin-bottom:12px">
+        <strong>Sentiment:</strong>
+        <span style="
+          {% if sentiment|lower == 'positive' %}
+            background:#d4edda;color:#155724;
+          {% elif sentiment|lower == 'negative' %}
+            background:#f8d7da;color:#721c24;
+          {% elif sentiment|lower == 'mixed' %}
+            background:#fff3cd;color:#856404;
+          {% else %}
+            background:#e2e3e5;color:#383d41;
+          {% endif %}
+          padding:4px 8px;border-radius:4px;display:inline-block;text-transform:capitalize;
+        ">{{ sentiment }}</span>
+      </div>
+      {% endif %}
+
+      {% if insights %}
+      <div>
+        <strong>Key Insights:</strong>
+        <ul style="margin:8px 0 0 20px;padding:0">
+          {% for insight in insights %}
+          <li style="margin:6px 0;font-size:14px;color:#555">{{ insight }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Original Entries -->
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:24px">
       <h3 style="margin:0">Original entries</h3>
     </div>

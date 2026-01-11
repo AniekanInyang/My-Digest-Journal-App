@@ -1,0 +1,21 @@
+# Fly.io Configuration for Journal App
+app = "my-journal-app"
+primary_region = "ewr"
+
+[build]
+dockerfile = "Dockerfile"
+
+[env]
+FLASK_ENV = "production"
+ENVIRONMENT = "deployed"
+
+[http_service]
+internal_port = 8080
+force_https = true
+auto_stop_machines = "stop"
+auto_start_machines = true
+
+[[vm]]
+cpu_kind = "shared"
+cpus = 1
+memory_mb = 256
