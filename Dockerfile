@@ -15,4 +15,5 @@ USER appuser
 
 EXPOSE 8080
 
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--timeout", "120", "--workers", "2", "--worker-class", "sync", "app:app"]
+# Railway sets $PORT environment variable, default to 8080 if not set
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-8080} --timeout 120 --workers 2 --worker-class sync app:app"]
