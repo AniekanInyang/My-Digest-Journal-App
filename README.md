@@ -6,9 +6,10 @@ Personal journal web app that analyzes and summarizes user's entries
 - CD to repo directory
 - Run `python3 install -r requirements.txt` in the terminal 
 - Create .env file
-- Change.env.example to .env and set environment variables.   
+- Change .env.example to .env and set environment variables.   
 
 ### To run app
 - CD to repo directory
 - Run `python3 app.py` in the terrminal
 - Open http://127.0.0.1:5000 in browser
+- Login with test user email and password set in .env 
