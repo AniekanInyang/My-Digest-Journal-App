@@ -394,7 +394,8 @@ def register():
                 new_user.set_password(password)
                 db.session.add(new_user)
                 db.session.commit()
-                success = 'Account created. You can sign in.'
+                # Redirect to login page after successful registration
+                return redirect(url_for('login'))
     
     return render_template('register.html', error=error, success=success)
 
