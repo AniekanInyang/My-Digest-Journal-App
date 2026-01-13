@@ -10,6 +10,7 @@ Tables:
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, timedelta, timezone
 import uuid
+from werkzeug.security import generate_password_hash, check_password_hash
 
 db = SQLAlchemy()
 
@@ -33,6 +34,16 @@ class User(db.Model):
     # Relationships
     entries = db.relationship('Entry', backref='author', lazy='dynamic', cascade='all, delete-orphan')
     reset_tokens = db.relationship('ResetToken', backref='user', lazy='dynamic', cascade='all, delete-orphan')
+
+    def set_password(self, password):
+        """Hash and set the user's password."""
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        """Check if the provided password matches the stored hash."""
+        if self.password_hash is None:
+            return False
+        return check_password_hash(self.password_hash, password)
 
     def __repr__(self):
         return f"<User {self.email}>"
