@@ -1,7 +1,11 @@
 flask
 python-dotenv>=1.0.0
 werkzeug
+openai>=1.0.0
+Flask-SQLAlchemy>=3.0.0
+gunicorn>=20.1.0
+Flask-Limiter>=4.0.0
 
-# Optional (for production):
-# bcrypt
-# Flask-WTF
+# Optional (for enhanced security):
+# bcrypt (for password hashing)
+# Flask-WTF (for CSRF protection)

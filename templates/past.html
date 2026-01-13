@@ -110,6 +110,9 @@
         });
       }
       document.addEventListener('change', (e)=>{ if(e.target && e.target.classList && e.target.classList.contains('select-checkbox')) updateBulk(); });
+      
+      // Call updateBulk on page load to show buttons if entries are pre-selected
+      updateBulk();
 
       // open modal when bulk delete clicked, only if selection exists
       if(bulkBtn){

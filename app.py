@@ -1,109 +1,142 @@
 from flask import Flask, render_template, request, redirect, url_for, session
 import json
 import os
+import re
 from datetime import datetime
-from datetime import timedelta
 from dotenv import load_dotenv
+from ai_service import get_summary, get_insights
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 # load .env from project root (python-dotenv)
 load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
 
-app = Flask(__name__, static_url_path='/static')
-app.secret_key = 'replace-this-with-a-secure-random-key'
+# ============================================
+# Environment & Configuration
+# ============================================
+ENVIRONMENT = os.environ.get('ENVIRONMENT', 'local').lower()  # 'local' or 'deployed'
+IS_DEPLOYED = ENVIRONMENT == 'deployed'
 
-# Simple test credentials (replace or wire in real auth in production)
+app = Flask(__name__, static_url_path='/static')
+app.secret_key = os.environ.get('SECRET_KEY')
+
+# ============================================
+# Rate Limiting Setup
+# ============================================
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"]
+)
+
+# ============================================
+# Input Validation Functions
+# ============================================
+def validate_email(email):
+    """Validate email format."""
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return re.match(pattern, email.strip()) is not None
+
+def validate_password(password):
+    """Validate password strength (min 8 chars)."""
+    if not password or len(password) < 8:
+        return False, "Password must be at least 8 characters"
+    return True, None
+
+def sanitize_name(name):
+    """Sanitize user name (max 100 chars, strip whitespace)."""
+    return name.strip()[:100]
+
+def sanitize_text(text, max_length=1000):
+    """Sanitize text input (strip, limit length)."""
+    return text.strip()[:max_length]
+
+# Simple test credentials (for local testing)
 TEST_USER = {
     'email': os.environ.get('TEST_EMAIL'),
     'password': os.environ.get('TEST_PASSWORD'),
     'name': os.environ.get('TEST_NAME')
 }
+
+# JSON file paths (used in local mode)
 DATA_FILE = os.path.join(os.path.dirname(__file__), 'journal.json')
-USERS_FILE = os.path.join(os.path.dirname(__file__), 'users.json')
-TOKENS_FILE = os.path.join(os.path.dirname(__file__), 'reset_tokens.json')
 
-
-def load_users():
-    if not os.path.exists(USERS_FILE):
-        return {}
-    with open(USERS_FILE, 'r', encoding='utf-8') as f:
+# ============================================
+# Database Setup (SQLAlchemy for deployed mode)
+# ============================================
+if IS_DEPLOYED:
+    from flask_sqlalchemy import SQLAlchemy
+    from models import db as models_db, User, Entry, ResetToken
+    
+    # Use SQLite on Fly.io (stored in /data/app.db which persists across restarts)
+    db_path = '/data/app.db' if os.path.exists('/data') or True else 'app.db'
+    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    
+    db = models_db
+    db.init_app(app)
+    
+    # Create tables on startup (only if they don't already exist)
+    with app.app_context():
         try:
-            return json.load(f)
-        except json.JSONDecodeError:
-            return {}
-
-
-def save_users(users):
-    with open(USERS_FILE, 'w', encoding='utf-8') as f:
-        json.dump(users, f, ensure_ascii=False, indent=2)
-
-
-def load_tokens():
-    if not os.path.exists(TOKENS_FILE):
-        return {}
-    with open(TOKENS_FILE, 'r', encoding='utf-8') as f:
-        try:
-            return json.load(f)
-        except json.JSONDecodeError:
-            return {}
-
-
-def save_tokens(tokens):
-    with open(TOKENS_FILE, 'w', encoding='utf-8') as f:
-        json.dump(tokens, f, ensure_ascii=False, indent=2)
+            db.create_all()
+        except Exception as e:
+            # Tables might already exist, which is fine
+            print(f"Note: db.create_all() raised an exception (likely tables exist): {e}")
+else:
+    # In local mode, we don't use SQLAlchemy - use JSON files instead
+    db = None
+    User = None
+    Entry = None
+    ResetToken = None
 
 
 def load_entries():
+    """Load entries from JSON (local mode only)."""
+    if IS_DEPLOYED:
+        return None
     if not os.path.exists(DATA_FILE):
         return []
     with open(DATA_FILE, 'r', encoding='utf-8') as f:
         try:
-            return json.load(f)
+            entries = json.load(f)
+            # Repair: ensure all IDs are unique and sequential
+            seen_ids = set()
+            next_id = 1
+            for e in entries:
+                if e.get('id') in seen_ids:
+                    # Duplicate ID found, assign a new one
+                    e['id'] = next_id
+                    while e['id'] in seen_ids:
+                        next_id += 1
+                        e['id'] = next_id
+                else:
+                    seen_ids.add(e.get('id'))
+                    next_id = max(next_id, (e.get('id') or 0) + 1)
+            # If IDs were fixed, save the corrected file
+            if len(seen_ids) != len(entries):
+                save_entries(entries)
+            return entries
         except json.JSONDecodeError:
             return []
 
 
 def save_entries(entries):
+    """Save entries to JSON (local mode only)."""
+    if IS_DEPLOYED:
+        return
     with open(DATA_FILE, 'w', encoding='utf-8') as f:
         json.dump(entries, f, ensure_ascii=False, indent=2)
 
 
-def _simple_summarize(texts, max_sentences=5):
-    """Very small extractive summarizer: score sentences by term frequency."""
-    # split into sentences naively by period. Keep original punctuation where possible.
-    import re
-    sentences = []
-    for t in texts:
-        parts = re.split(r'(?<=[\.!?])\s+', t.strip())
-        for p in parts:
-            s = p.strip()
-            if s:
-                sentences.append(s)
-    if not sentences:
-        return ''
-
-    # build a simple token frequency map (lowercased words, strip punctuation)
-    freq = {}
-    WORD_RE = re.compile(r"\b[a-zA-Z]{2,}\b")
-    for s in sentences:
-        for w in WORD_RE.findall(s.lower()):
-            freq[w] = freq.get(w, 0) + 1
-
-    # score sentences
-    scored = []
-    for s in sentences:
-        score = 0
-        for w in WORD_RE.findall(s.lower()):
-            score += freq.get(w, 0)
-        scored.append((score, s))
-
-    # pick top-N sentences by score, preserve original order
-    scored.sort(key=lambda x: x[0], reverse=True)
-    top = set(s for _, s in scored[:max_sentences])
-    ordered = [s for s in sentences if s in top]
-    return ' '.join(ordered)
+def generate_reset_token():
+    """Generate a unique reset token for password reset."""
+    import uuid
+    return str(uuid.uuid4())
 
 
 @app.route('/')
+
 def index():
     if not session.get('user'):
         return redirect(url_for('login'))
@@ -168,8 +201,8 @@ def edit_entry(entry_id):
     if not entry:
         return redirect(url_for('index'))
     if request.method == 'POST':
-        title = request.form.get('title', '').strip()
-        content = request.form.get('content', '').strip()
+        title = sanitize_text(request.form.get('title', ''), max_length=200)
+        content = sanitize_text(request.form.get('content', ''), max_length=10000)
         entry['title'] = title
         entry['content'] = content
         save_entries(entries)
@@ -233,8 +266,8 @@ def new_entry():
     if not session.get('user'):
         return redirect(url_for('login'))
     if request.method == 'POST':
-        title = request.form.get('title', '').strip()
-        content = request.form.get('content', '').strip()
+        title = sanitize_text(request.form.get('title', ''), max_length=200)
+        content = sanitize_text(request.form.get('content', ''), max_length=10000)
         if title or content:
             entries = load_entries()
             entry = {
@@ -254,17 +287,24 @@ def new_entry():
 
 @app.route('/summarize', methods=['POST'])
 def summarize_selected():
-    """Summarize selected entries (form field 'selected') and show a summary page."""
+    """Summarize selected entries using Azure OpenAI and show a summary page."""
     if not session.get('user'):
         return redirect(url_for('login'))
     selected = request.form.getlist('selected')
-    # handle ids that might be strings from the form; compare both ways
-    # persist the selection so Past can re-check them when user returns
+    # Persist the selection so Past can re-check them when user returns
     session['selected_ids'] = selected
-    selected_set = set(selected)
+    
+    # Convert selected IDs to integers for comparison
+    try:
+        selected_ids = set(int(x) for x in selected)
+    except (ValueError, TypeError):
+        selected_ids = set()
+    
     entries = load_entries()
-    chosen = [e for e in entries if str(e.get('id')) in selected_set or e.get('id') in (int(x) for x in selected if x.isdigit())]
-    # sort chosen by created_at desc and compute display_time like elsewhere
+    # Match entries by ID only
+    chosen = [e for e in entries if e.get('id') in selected_ids]
+    
+    # Sort chosen by created_at desc and compute display_time like elsewhere
     chosen = sorted(chosen, key=lambda e: e['created_at'], reverse=True)
     for e in chosen:
         try:
@@ -273,77 +313,25 @@ def summarize_selected():
         except Exception:
             e['display_time'] = e['created_at']
 
-    texts = [ (e.get('title') or '') + '. ' + (e.get('content') or '') for e in chosen ]
-    summary = _simple_summarize(texts, max_sentences=5)
-    return render_template('summary.html', summary=summary, entries=chosen)
-
-
-@app.route('/register', methods=['GET', 'POST'])
-def register():
-    if session.get('user'):
-        return redirect(url_for('index'))
-    error = None
-    success = None
-    if request.method == 'POST':
-        name = request.form.get('name', '').strip()
-        email = request.form.get('email', '').strip().lower()
-        password = request.form.get('password', '')
-        users = load_users()
-        if not email or not password:
-            error = 'Email and password required'
-        elif email in users:
-            error = 'Account already exists'
-        else:
-            users[email] = {'name': name or email.split('@')[0].title(), 'password': password}
-            save_users(users)
-            success = 'Account created. You can sign in.'
-    return render_template('register.html', error=error, success=success)
-
-
-@app.route('/forgot', methods=['GET', 'POST'])
-def forgot():
-    info = None
-    if request.method == 'POST':
-        email = request.form.get('email', '').strip().lower()
-        users = load_users()
-        if email in users:
-            # generate a simple token
-            import uuid
-            token = uuid.uuid4().hex
-            tokens = load_tokens()
-            tokens[token] = {'email': email}
-            save_tokens(tokens)
-            # In a real app we'd email this. For demo, show the link.
-            info = f"Reset link (demo): /reset/{token}"
-        else:
-            info = 'If that email exists, a reset link was generated.'
-    return render_template('forgot.html', info=info)
-
-
-@app.route('/reset/<token>', methods=['GET', 'POST'])
-def reset(token):
-    tokens = load_tokens()
-    data = tokens.get(token)
-    if not data:
-        return render_template('reset.html', error='Invalid or expired token')
-    if request.method == 'POST':
-        password = request.form.get('password', '')
-        if not password:
-            return render_template('reset.html', error='Password required')
-        users = load_users()
-        email = data['email']
-        if email in users:
-            users[email]['password'] = password
-            save_users(users)
-            # consume token
-            tokens.pop(token, None)
-            save_tokens(tokens)
-            return redirect(url_for('login'))
-        return render_template('reset.html', error='User not found')
-    return render_template('reset.html')
+    # Combine selected entries' text
+    texts = [(e.get('title') or '') + '. ' + (e.get('content') or '') for e in chosen]
+    combined_text = '\n\n'.join(texts)
+    
+    # Get summary and insights from Azure OpenAI
+    summary = get_summary(combined_text)
+    insights_data = get_insights(combined_text)
+    
+    return render_template(
+        'summary.html',
+        summary=summary,
+        sentiment=insights_data.get('sentiment', 'unknown'),
+        insights=insights_data.get('insights', []),
+        entries=chosen
+    )
 
 
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit("5 per minute")
 def login():
     # If already logged in, redirect to index
     if session.get('user'):
@@ -352,17 +340,127 @@ def login():
     if request.method == 'POST':
         email = request.form.get('email', '').strip()
         password = request.form.get('password', '').strip()
-        users = load_users()
-        u = users.get(email.lower())
-        if u and u.get('password') == password:
-            session['user'] = {'email': email, 'name': u.get('name', email.split('@')[0].title())}
-            return redirect(url_for('index'))
-        # fallback to TEST_USER for demo if present
-        if email == TEST_USER.get('email') and password == TEST_USER.get('password'):
-            session['user'] = {'email': email, 'name': TEST_USER.get('name', email.split('@')[0].title())}
-            return redirect(url_for('index'))
+        
+        # Basic validation
+        if not email or not password:
+            return render_template('login.html', error='Email and password required')
+        
+        if IS_DEPLOYED:
+            # In deployed mode, check database
+            user = db.session.query(User).filter_by(email=email.lower()).first()
+            if user and user.check_password(password):
+                session['user'] = {'email': user.email, 'name': user.name}
+                return redirect(url_for('index'))
+        else:
+            # In local mode, only check TEST_USER
+            if email == TEST_USER.get('email') and password == TEST_USER.get('password'):
+                session['user'] = {'email': email, 'name': TEST_USER.get('name')}
+                return redirect(url_for('index'))
+        
         return render_template('login.html', error='Invalid credentials')
     return render_template('login.html')
+
+
+@app.route('/register', methods=['GET', 'POST'])
+@limiter.limit("3 per hour")
+def register():
+    # Registration only available in deployed mode
+    if not IS_DEPLOYED:
+        return redirect(url_for('login'))
+    
+    if session.get('user'):
+        return redirect(url_for('index'))
+    
+    error = None
+    success = None
+    if request.method == 'POST':
+        name = request.form.get('name', '')
+        email = request.form.get('email', '').strip().lower()
+        password = request.form.get('password', '')
+        
+        # Input validation
+        if not email or not password:
+            error = 'Email and password required'
+        elif not validate_email(email):
+            error = 'Invalid email format'
+        elif db.session.query(User).filter_by(email=email).first():
+            error = 'Account already exists'
+        else:
+            valid, err_msg = validate_password(password)
+            if not valid:
+                error = err_msg
+            else:
+                new_user = User(name=sanitize_name(name) or email.split('@')[0].title(), email=email)
+                new_user.set_password(password)
+                db.session.add(new_user)
+                db.session.commit()
+                # Redirect to login page after successful registration
+                return redirect(url_for('login'))
+    
+    return render_template('register.html', error=error, success=success)
+
+
+@app.route('/forgot', methods=['GET', 'POST'])
+@limiter.limit("5 per hour")
+def forgot():
+    # Password reset only available in deployed mode
+    if not IS_DEPLOYED:
+        return redirect(url_for('login'))
+    
+    if session.get('user'):
+        return redirect(url_for('index'))
+    
+    error = None
+    success = None
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip().lower()
+        
+        # Validate email format
+        if not email or not validate_email(email):
+            error = 'Please enter a valid email'
+        else:
+            user = db.session.query(User).filter_by(email=email).first()
+            if user:
+                # Create a reset token
+                token = generate_reset_token()
+                reset_token = ResetToken(user_id=user.id, token=token)
+                db.session.add(reset_token)
+                db.session.commit()
+                # In production, you'd send this via email
+                success = f'Password reset token: {token} (check your email in production)'
+            else:
+                error = 'Email not found'
+    
+    return render_template('forgot.html', error=error, success=success)
+
+
+@app.route('/reset/<token>', methods=['GET', 'POST'])
+def reset(token):
+    # Password reset only available in deployed mode
+    if not IS_DEPLOYED:
+        return redirect(url_for('login'))
+    
+    if session.get('user'):
+        return redirect(url_for('index'))
+    
+    reset_token = db.session.query(ResetToken).filter_by(token=token).first()
+    if not reset_token or not reset_token.is_valid():
+        return render_template('reset.html', error='Invalid or expired token')
+    
+    error = None
+    success = None
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        if not password:
+            error = 'Password required'
+        else:
+            user = reset_token.user
+            user.set_password(password)
+            db.session.delete(reset_token)
+            db.session.commit()
+            success = 'Password reset successful. You can now sign in.'
+    
+    return render_template('reset.html', error=error, success=success)
 
 
 @app.route('/logout')
