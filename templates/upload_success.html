@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <div style="max-width: 500px; margin: 60px auto; padding: 0 20px; text-align: center;">
+    <div style="background: #f0f7f0; padding: 40px; border-radius: 12px; border: 2px solid #4caf50;">
+      <svg style="width: 60px; height: 60px; margin-bottom: 20px; color: #4caf50;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>
+      
+      <h2 style="color: #2e7d32; margin-bottom: 12px;">Upload Successful!</h2>
+      
+      <p style="color: #666; font-size: 16px; margin-bottom: 24px;">
+        Successfully imported <strong style="color: #2e7d32;">{{ count }}</strong> journal {{ 'entry' if count == 1 else 'entries' }}.
+      </p>
+
+      <div class="form-actions" style="justify-content: center;">
+        <a class="btn primary" href="/">View Your Journal</a>
+      </div>
+    </div>
+  </div>
+{% endblock %}

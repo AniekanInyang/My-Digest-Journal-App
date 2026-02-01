@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <div style="max-width: 800px; margin: 40px auto; padding: 0 20px;">
+    <h2>Review Entries</h2>
+    
+    <p style="color: #666; margin-bottom: 20px;">
+      Found <strong>{{ entries|length }}</strong> entries. Review and select which ones to import:
+    </p>
+
+    {% if errors %}
+      <div style="background: #fffbeb; padding: 16px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #f59e0b; color: #92400e;">
+        <strong>Issues Found:</strong>
+        <p style="margin: 8px 0 0 0; font-size: 13px;">
+          The following entries could not be imported:
+        </p>
+        <ul style="margin: 8px 0 0 0; padding-left: 20px; font-size: 13px;">
+          {% for error in errors[:5] %}
+            <li>{{ error }}</li>
+          {% endfor %}
+          {% if errors|length > 5 %}
+            <li>... and {{ errors|length - 5 }} more issues</li>
+          {% endif %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <form method="post" style="margin-bottom: 40px;">
+      <div style="background: white; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
+        {% for entry in entries %}
+          <div style="border-bottom: 1px solid #eee; padding: 16px; display: flex; gap: 12px; align-items: flex-start;">
+            <input type="checkbox" name="confirmed" value="{{ loop.index0 }}" checked style="margin-top: 4px; cursor: pointer;" />
+            <div style="flex: 1;">
+              <div style="font-weight: 600; color: #b19cd9; margin-bottom: 8px;">
+                {{ entry.date }}
+              </div>
+              <div style="color: #666; line-height: 1.6; font-size: 14px; max-height: 100px; overflow: hidden;">
+                {{ entry.content[:200] }}{% if entry.content|length > 200 %}...{% endif %}
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+
+      <div class="form-actions" style="margin-top: 24px;">
+        <button class="btn primary" type="submit" name="action" value="confirm">Import Selected</button>
+        <button class="btn" type="submit" name="action" value="cancel">Cancel</button>
+      </div>
+    </form>
+
+    <div style="text-align: center; color: #999; font-size: 13px;">
+      <p>Total entries to import: <strong>{{ entries|length }}</strong></p>
+    </div>
+  </div>
+{% endblock %}
