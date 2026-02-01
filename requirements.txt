@@ -1,3 +1,8 @@
 flask
+flask-limiter
+flask-sqlalchemy
 python-dotenv>=1.0.0
 openai>=1.0.0
+pdfplumber
+python-docx
+werkzeug

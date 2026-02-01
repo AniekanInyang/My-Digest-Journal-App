@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <div style="max-width: 600px; margin: 40px auto; padding: 0 20px;">
+    <h2>Bulk Upload Entries</h2>
+    
+    <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+      <p style="margin: 0 0 12px 0; color: #666;">
+        Upload a document containing dated journal entries. Supported formats:
+      </p>
+      <ul style="margin: 0; color: #666; font-size: 14px;">
+        <li><strong>TXT</strong> - Plain text files</li>
+        <li><strong>PDF</strong> - PDF documents</li>
+        <li><strong>DOCX</strong> - Microsoft Word documents</li>
+      </ul>
+      <p style="margin: 12px 0 0 0; color: #999; font-size: 13px;">
+        Maximum file size: 16MB. Format your entries with the date on its own line, followed by the entry content.
+      </p>
+    </div>
+
+    {% if error %}
+      <div style="background: #fee; padding: 16px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #c33; color: #c33;">
+        <strong>Error:</strong> {{ error }}
+        <p style="margin: 8px 0 0 0; font-size: 13px; color: #a22;">
+          Please check your file and try again.
+        </p>
+      </div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" class="entry-form">
+      <label>Choose File</label>
+      <input type="file" name="file" accept=".txt,.pdf,.docx" required style="padding: 12px; border: 2px dashed #ddd; border-radius: 8px; cursor: pointer;" />
+
+      <div class="form-actions" style="margin-top: 24px;">
+        <button class="btn primary" type="submit">Upload & Review</button>
+        <a class="btn" href="/">Cancel</a>
+      </div>
+    </form>
+
+    <div style="margin-top: 40px; padding: 20px; background: #f9f9f9; border-radius: 8px; border-left: 4px solid #b19cd9;">
+      <h4 style="margin-top: 0; color: #b19cd9;">Example Format</h4>
+      <pre style="background: white; padding: 12px; border-radius: 4px; overflow-x: auto; font-size: 12px;">2025-12-31
+Had a wonderful day at the beach. The weather was perfect.
+
+2025-12-30
+Finished reading that book I've been working on. Great ending!
+
+2025-12-29
+Rainy day, but managed to be productive at home.</pre>
+    </div>
+  </div>
+{% endblock %}

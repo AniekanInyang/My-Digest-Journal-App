@@ -8,12 +8,34 @@
         {% if error %}<div class="error">{{ error }}</div>{% endif %}
         {% if success %}<div class="success">{{ success }}</div>{% endif %}
         <form method="post" action="/register" class="login-form">
-          <label>Name</label>
-          <input type="text" name="name" required />
+          <label>First Name</label>
+          <input type="text" name="first_name" required />
+          <label>Last Name</label>
+          <input type="text" name="last_name" required />
           <label>Email</label>
           <input type="email" name="email" required />
           <label>Password</label>
-          <input type="password" name="password" required />
+          <div style="position: relative; display: flex; align-items: center;">
+            <input type="password" name="password" id="password" required style="flex: 1; padding-right: 35px;" />
+            <button type="button" id="togglePassword" style="position: absolute; right: 8px; background: none; border: none; cursor: pointer; color: #666;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+            </button>
+          </div>
+          <script>
+            const passwordInput = document.getElementById('password');
+            const toggleButton = document.getElementById('togglePassword');
+            toggleButton.addEventListener('click', function(e) {
+              e.preventDefault();
+              if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+              } else {
+                passwordInput.type = 'password';
+              }
+            });
+          </script>
           <div class="form-actions">
             <button class="btn primary" type="submit">Create account</button>
           </div>
