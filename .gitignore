@@ -230,4 +230,6 @@ journal.db
 users.json
 journal.json
 
-
+# Product Docs
+PRD.md 
+TODO.md
