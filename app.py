@@ -18,6 +18,7 @@ from services.rag_service import (
     delete_entry_from_vector_db,
     get_collection_stats
 )
+from services.topic_service import cluster_entries_with_llm, filter_entries_by_topic
 
 # load .env from project root (python-dotenv)
 load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
@@ -1005,10 +1006,102 @@ def migrate_entries():
                          total_entries=len(entries))
 
 
+@app.route('/api/analyze_topics')
+@limiter.limit("10 per hour")
+def analyze_topics():
+    """Analyze topics for filtered entries on-demand."""
+    if not session.get('user'):
+        return jsonify({'success': False, 'message': 'Not authenticated'}), 401
+    
+    try:
+        # Get filter params
+        preset = request.args.get('preset', 'all')
+        start = request.args.get('start')
+        end = request.args.get('end')
+        
+        # Load and filter entries (using same logic as /past route)
+        entries = load_entries()
+        
+        def in_range(e):
+            ts = datetime.fromisoformat(e['created_at'].replace('Z', ''))
+            now = datetime.utcnow()
+            if preset and preset != 'custom' and preset != 'all':
+                if preset == 'week':
+                    return (now - ts).days < 7
+                if preset == 'month':
+                    return (now - ts).days < 31
+                if preset == 'year':
+                    return (now - ts).days < 365
+            if start:
+                try:
+                    s = datetime.fromisoformat(start)
+                    if ts < s:
+                        return False
+                except Exception:
+                    pass
+            if end:
+                try:
+                    e_dt = datetime.fromisoformat(end)
+                    if ts > e_dt:
+                        return False
+                except Exception:
+                    pass
+            return True
+        
+        filtered_entries = [e for e in entries if in_range(e)]
+        
+        # Check minimum entry count
+        if len(filtered_entries) < 3:
+            return jsonify({
+                'success': False,
+                'message': 'Not enough entries to analyze topics. Need at least 3 entries in the selected time range.',
+                'entry_count': len(filtered_entries)
+            })
+        
+        # Cluster entries into topics
+        topics = cluster_entries_with_llm(filtered_entries)
+        
+        if not topics:
+            return jsonify({
+                'success': False,
+                'message': 'Unable to identify topics from these entries. Try a different time range.',
+                'entry_count': len(filtered_entries)
+            })
+        
+        # Store topics in session for filtering
+        session['cached_topics'] = {
+            'preset': preset,
+            'start': start,
+            'end': end,
+            'topics': topics,
+            'timestamp': datetime.utcnow().isoformat()
+        }
+        
+        return jsonify({
+            'success': True,
+            'topics': topics,
+            'entry_count': len(filtered_entries),
+            'time_range': {
+                'preset': preset,
+                'start': start,
+                'end': end
+            }
+        })
+        
+    except Exception as e:
+        print(f"Error analyzing topics: {e}")
+        return jsonify({
+            'success': False,
+            'message': 'An error occurred while analyzing topics. Please try again.',
+            'error': str(e)
+        }), 500
+
+
 @app.route('/logout')
 def logout():
     session.pop('user', None)
     session.pop('selected_ids', None)
+    session.pop('cached_topics', None)
     return redirect(url_for('login'))
 
 

@@ -19,8 +19,23 @@
       </div>
       <button class="btn" type="submit">Filter</button>
     </form>
-    <div style="margin-left:12px;">
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button id="analyzeTopicsBtn" class="btn" style="font-size:14px;padding:8px 12px">📊 Topics</button>
       <a class="btn primary" href="/new">New Entry</a>
+    </div>
+  </section>
+
+  <!-- Topics Section (initially hidden) -->
+  <section id="topicsSection" class="topics-section" style="display:none;margin-bottom:20px;">
+    <div class="topics-container">
+      <div class="topics-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <span style="font-weight:600;color:#4a5568;">📊 Topics in this time range:</span>
+        <button id="hideTopicsBtn" class="btn" style="font-size:13px;padding:4px 10px;">✕ Hide</button>
+      </div>
+      <div id="topicsPills" class="topics-pills" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px;">
+        <!-- Pills will be inserted here by JavaScript -->
+      </div>
+      <p id="topicsHelp" style="font-size:13px;color:#718096;margin-top:8px;">Click a topic to filter entries by theme</p>
     </div>
   </section>
 
@@ -143,6 +158,166 @@
           .then(r => { if(r.ok) location.reload(); else alert('Delete failed'); })
           .catch(()=> alert('Delete failed'));
       });
+
+      // ============================================
+      // Topics Analysis Feature
+      // ============================================
+      const analyzeBtn = document.getElementById('analyzeTopicsBtn');
+      const topicsSection = document.getElementById('topicsSection');
+      const hideTopicsBtn = document.getElementById('hideTopicsBtn');
+      const topicsPills = document.getElementById('topicsPills');
+      let currentTopics = [];
+      let selectedTopic = null;
+
+      // Get current filter params
+      function getFilterParams() {
+        const urlParams = new URLSearchParams(window.location.search);
+        return {
+          preset: urlParams.get('preset') || 'all',
+          start: urlParams.get('start') || '',
+          end: urlParams.get('end') || ''
+        };
+      }
+
+      // Analyze topics when button clicked
+      if(analyzeBtn) {
+        analyzeBtn.addEventListener('click', async function() {
+          const btn = this;
+          const originalText = btn.innerHTML;
+          
+          // Show loading state
+          btn.disabled = true;
+          btn.innerHTML = '⏳ Analyzing...';
+          
+          try {
+            const params = getFilterParams();
+            const queryString = new URLSearchParams(params).toString();
+            const response = await fetch(`/api/analyze_topics?${queryString}`);
+            const data = await response.json();
+            
+            if (data.success) {
+              currentTopics = data.topics;
+              displayTopics(data.topics);
+              btn.style.display = 'none';
+              topicsSection.style.display = 'block';
+            } else {
+              alert(data.message || 'Failed to analyze topics');
+              btn.disabled = false;
+              btn.innerHTML = originalText;
+            }
+          } catch (error) {
+            console.error('Error:', error);
+            alert('Failed to analyze topics. Please try again.');
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+          }
+        });
+      }
+
+      // Hide topics section
+      if(hideTopicsBtn) {
+        hideTopicsBtn.addEventListener('click', function() {
+          topicsSection.style.display = 'none';
+          analyzeBtn.style.display = 'inline-block';
+          analyzeBtn.disabled = false;
+          selectedTopic = null;
+          showAllEntries();
+        });
+      }
+
+      // Display topics as clickable pills
+      function displayTopics(topics) {
+        topicsPills.innerHTML = '';
+        
+        topics.forEach(topic => {
+          const pill = document.createElement('span');
+          pill.className = 'topic-pill';
+          pill.innerHTML = `${topic.emoji} ${topic.name} (${topic.count})`;
+          pill.style.cssText = `
+            display: inline-block;
+            padding: 8px 16px;
+            background: #f7fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+            user-select: none;
+          `;
+          
+          pill.addEventListener('mouseenter', function() {
+            if (selectedTopic !== topic.name) {
+              this.style.background = '#edf2f7';
+              this.style.borderColor = '#cbd5e0';
+            }
+          });
+          
+          pill.addEventListener('mouseleave', function() {
+            if (selectedTopic !== topic.name) {
+              this.style.background = '#f7fafc';
+              this.style.borderColor = '#e2e8f0';
+            }
+          });
+          
+          pill.addEventListener('click', function() {
+            if (selectedTopic === topic.name) {
+              // Deselect
+              selectedTopic = null;
+              this.style.background = '#f7fafc';
+              this.style.borderColor = '#e2e8f0';
+              showAllEntries();
+            } else {
+              // Select this topic
+              // Deselect all other pills
+              document.querySelectorAll('.topic-pill').forEach(p => {
+                p.style.background = '#f7fafc';
+                p.style.borderColor = '#e2e8f0';
+              });
+              
+              selectedTopic = topic.name;
+              this.style.background = '#667eea';
+              this.style.borderColor = '#5a67d8';
+              this.style.color = 'white';
+              filterEntriesByTopic(topic.entry_ids);
+            }
+          });
+          
+          topicsPills.appendChild(pill);
+        });
+      }
+
+      // Filter entries by topic (client-side)
+      function filterEntriesByTopic(entryIds) {
+        const allEntries = document.querySelectorAll('.entry');
+        let visibleCount = 0;
+        
+        allEntries.forEach(entry => {
+          const checkbox = entry.querySelector('.select-checkbox');
+          if (checkbox) {
+            const entryId = parseInt(checkbox.value);
+            if (entryIds.includes(entryId)) {
+              entry.style.display = '';
+              visibleCount++;
+            } else {
+              entry.style.display = 'none';
+            }
+          }
+        });
+        
+        document.getElementById('topicsHelp').textContent = 
+          `Showing ${visibleCount} entries for this topic. Click again to show all.`;
+      }
+
+      // Show all entries
+      function showAllEntries() {
+        const allEntries = document.querySelectorAll('.entry');
+        allEntries.forEach(entry => {
+          entry.style.display = '';
+        });
+        
+        document.getElementById('topicsHelp').textContent = 
+          'Click a topic to filter entries by theme';
+      }
     })();
   </script>
 {% endblock %}

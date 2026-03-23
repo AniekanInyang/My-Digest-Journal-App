@@ -40,8 +40,6 @@ Personal journal web app with AI-powered summaries, insights, and semantic searc
 ### First-time RAG Setup
 1. Start the app
 2. Click "Ask My Journal" button
-3. Click "🔄 Migrate Existing Entries" 
-4. Wait for migration to complete
-5. Start asking questions!
+3. Wait for migration to complete
+4. Start asking questions!
 
-**See [PHASE1_README.md](PHASE1_README.md) for detailed RAG setup and usage** 
