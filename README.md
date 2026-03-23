@@ -9,20 +9,18 @@ Personal journal web app with AI-powered summaries, insights, and semantic searc
 - 🔍 Find entries by meaning, not just keywords
 - 📊 Pattern detection and insights
 
-**See [PHASE1_README.md](PHASE1_README.md) for full details!**
-
 ---
 
 ## Features
 
-- 📝 Create and manage journal entries
-- 📅 Calendar date picker for backdated entries
-- 📄 Bulk import from PDF, DOCX, and TXT files
-- 🤖 AI-generated summaries and insights (Azure OpenAI)
-- 💬 **NEW:** Natural language chat with your journal
-- 🔍 **NEW:** Semantic search across entries
-- 🔐 User authentication and registration
-- 📊 Entry selection and batch operations
+- User authentication and registration
+- Create and manage journal entries
+- Calendar date picker for backdated entries
+- Bulk import from PDF, DOCX, and TXT files
+- AI-generated summaries and insights (Azure OpenAI)
+- Natural language chat with your journal
+- Semantic search across entries
+- Entry selection and batch operations
 
 ### For the initial setup
 - Clone git repo
