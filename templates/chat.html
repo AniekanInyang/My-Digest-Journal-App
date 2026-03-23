@@ -1,0 +1,463 @@
+{% extends "base.html" %}
+
+{% block title %}Ask My Journal{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>Ask My Journal</h1>
+    <p class="subtitle">Search your journal using natural language and get AI-powered insights</p>
+
+    <!-- Search Stats -->
+    {% if stats %}
+    <div class="stats-box">
+        <div class="stats-info">
+            <p>🔍 Searching across {{ stats.total_entries }} journal entries</p>
+        </div>
+        <div class="time-range-selector">
+            <label for="timeRange">Time Range:</label>
+            <select id="timeRange" name="time_range" onchange="updateTimeRange(this.value)">
+                <option value="all" {% if time_range == 'all' %}selected{% endif %}>All Time</option>
+                <option value="1week" {% if time_range == '1week' %}selected{% endif %}>Last Week</option>
+                <option value="1month" {% if time_range == '1month' %}selected{% endif %}>Last Month</option>
+                <option value="3months" {% if time_range == '3months' %}selected{% endif %}>Last 3 Months</option>
+                <option value="6months" {% if time_range == '6months' %}selected{% endif %}>Last 6 Months</option>
+                <option value="1year" {% if time_range == '1year' %}selected{% endif %}>Last Year</option>
+            </select>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Chat Interface -->
+    <div class="chat-container">
+        <div class="chat-messages" id="chatMessages">
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="message {{ message.role }}">
+                        <div class="message-header">
+                            {% if message.role == 'user' %}
+                                <strong>You</strong>
+                            {% else %}
+                                <strong>Journal Assistant</strong>
+                            {% endif %}
+                            <span class="timestamp">{{ message.timestamp }}</span>
+                        </div>
+                        <div class="message-content">
+                            {{ message.content }}
+                        </div>
+                        {% if message.entries %}
+                            <div class="context-entries">
+                                <details>
+                                    <summary>📝 Based on {{ message.entries|length }} entries</summary>
+                                    <div class="entries-list">
+                                        {% for entry in message.entries %}
+                                            <div class="context-entry">
+                                                <strong>{{ entry.date }}</strong>
+                                                <p>{{ entry.content[:200] }}{% if entry.content|length > 200 %}...{% endif %}</p>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                </details>
+                            </div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="welcome-message">
+                    <h2>Welcome to Journal Chat! 💬</h2>
+                    <p>Ask questions about your journal entries:</p>
+                    <div class="example-queries-compact">
+                        <span class="example-query">"What patterns do you see in my mood?"</span>
+                        <span class="example-query">"What makes me the happiest?"</span>
+                        <span class="example-query">"What's been causing me the most stress?"</span>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- Input Form -->
+        <form method="POST" class="chat-input-form" id="chatForm">
+            <input type="hidden" name="time_range" id="timeRangeInput" value="{{ time_range or 'all' }}">
+            <div class="input-group">
+                <input 
+                    type="text" 
+                    name="query" 
+                    id="queryInput"
+                    placeholder="Ask a question about your journal..." 
+                    required
+                    autocomplete="off"
+                    {% if not stats or stats.total_entries == 0 %}disabled{% endif %}
+                >
+                <button 
+                    type="submit" 
+                    class="send-button"
+                    {% if not stats or stats.total_entries == 0 %}disabled{% endif %}
+                >
+                    <span class="send-icon">➤</span>
+                </button>
+            </div>
+            {% if not stats or stats.total_entries == 0 %}
+                <p class="warning-text">⚠️ No entries in vector database. Loading...</p>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="action-buttons">
+        <a href="{{ url_for('index') }}" class="btn btn-secondary">← Back to Journal</a>
+        <a href="{{ url_for('migrate_entries') }}" class="btn btn-outline">🔄 Migrate Existing Entries</a>
+    </div>
+</div>
+
+<style>
+.subtitle {
+    color: #666;
+    margin-bottom: 30px;
+}
+
+.stats-box {
+    background: #f0e6ff;
+    border-left: 4px solid #b19cd9;
+    padding: 15px;
+    margin-bottom: 20px;
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.stats-info p {
+    margin: 0;
+    color: #333;
+}
+
+.time-range-selector {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.time-range-selector label {
+    color: #666;
+    font-weight: 500;
+    font-size: 0.9em;
+}
+
+.time-range-selector select {
+    padding: 8px 12px;
+    border: 2px solid #d0b3f0;
+    border-radius: 4px;
+    background: white;
+    color: #333;
+    font-size: 0.9em;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.time-range-selector select:hover {
+    border-color: #b19cd9;
+}
+
+.time-range-selector select:focus {
+    outline: none;
+    border-color: #b19cd9;
+}
+
+.chat-container {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    margin-bottom: 30px;
+    display: flex;
+    flex-direction: column;
+    min-height: 400px;
+    max-height: 600px;
+}
+
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    min-height: 200px;
+}
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.message {
+    max-width: 80%;
+    padding: 15px;
+    border-radius: 8px;
+    animation: fadeIn 0.3s ease;
+}
+
+.message.user {
+    align-self: flex-end;
+    background: #b19cd9;
+    color: white;
+}
+
+.message.assistant {
+    align-self: flex-start;
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+}
+
+.message-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 0.9em;
+}
+
+.timestamp {
+    opacity: 0.7;
+    font-size: 0.85em;
+}
+
+.message-content {
+    line-height: 1.6;
+    white-space: pre-wrap;
+}
+
+.context-entries {
+    margin-top: 15px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255,255,255,0.3);
+}
+
+.message.assistant .context-entries {
+    border-top-color: #ddd;
+}
+
+.context-entries details {
+    cursor: pointer;
+}
+
+.context-entries summary {
+    font-size: 0.9em;
+    opacity: 0.8;
+    user-select: none;
+}
+
+.entries-list {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.context-entry {
+    background: rgba(0,0,0,0.05);
+    padding: 10px;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.context-entry strong {
+    display: block;
+    margin-bottom: 5px;
+    color: #b19cd9;
+}
+
+.context-entry p {
+    margin: 0;
+    color: #666;
+}
+
+.welcome-message {
+    text-align: center;
+    padding: 30px 20px 20px 20px;
+}
+
+.welcome-message h2 {
+    color: #b19cd9;
+    margin-bottom: 10px;
+}
+
+.welcome-message p {
+    margin-bottom: 12px;
+}
+
+.example-queries-compact {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    padding: 0;
+    margin: 0;
+}
+
+.example-query {
+    background: #f0e6ff;
+    padding: 8px 14px;
+    border-radius: 20px;
+    color: #333;
+    font-size: 0.9em;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-block;
+}
+
+.example-query:hover {
+    background: #e8ddf7;
+    transform: translateY(-2px);
+    box-shadow: 0 2px 6px rgba(177, 156, 217, 0.3);
+}
+
+/* Old style for backwards compatibility */
+.example-queries {
+    list-style: none;
+    padding: 0;
+    margin: 20px 0;
+    text-align: left;
+    display: inline-block;
+}
+
+.example-queries li {
+    background: #f0e6ff;
+    padding: 10px 15px;
+    margin: 8px 0;
+    border-radius: 4px;
+    color: #333;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.example-queries li:hover {
+    background: #e8ddf7;
+}
+
+.chat-input-form {
+    padding: 20px;
+    border-top: 1px solid #eee;
+}
+
+.input-group {
+    display: flex;
+    gap: 10px;
+}
+
+.input-group input {
+    flex: 1;
+    padding: 12px 15px;
+    border: 2px solid #ddd;
+    border-radius: 4px;
+    font-size: 1em;
+}
+
+.input-group input:focus {
+    outline: none;
+    border-color: #b19cd9;
+}
+
+.input-group input:disabled {
+    background: #f5f5f5;
+    cursor: not-allowed;
+}
+
+.send-button {
+    background: #b19cd9;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 12px 24px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.send-button:hover:not(:disabled) {
+    background: #9d82c5;
+}
+
+.send-button:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+.send-icon {
+    font-size: 1.2em;
+}
+
+.warning-text {
+    color: #856404;
+    background: #fff3cd;
+    border: 1px solid #ffeeba;
+    padding: 10px;
+    margin-top: 10px;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+}
+
+.btn-outline {
+    background: white;
+    color: #b19cd9;
+    border: 2px solid #b19cd9;
+}
+
+.btn-outline:hover {
+    background: #f0e6ff;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Auto-scroll behavior */
+.chat-messages {
+    scroll-behavior: smooth;
+}
+</style>
+
+<script>
+// Update time range
+function updateTimeRange(value) {
+    document.getElementById('timeRangeInput').value = value;
+    // Clear chat history when changing time range
+    fetch('/chat/clear', { method: 'POST' })
+        .then(() => {
+            window.location.href = '/chat?time_range=' + value;
+        });
+}
+
+// Auto-scroll to bottom on load
+window.addEventListener('load', function() {
+    const chatMessages = document.getElementById('chatMessages');
+    if (chatMessages) {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+});
+
+// Click example queries to populate input (both old and new formats)
+document.querySelectorAll('.example-queries li, .example-query').forEach(element => {
+    element.addEventListener('click', function() {
+        const query = this.textContent.replace(/['"]/g, '');
+        document.getElementById('queryInput').value = query;
+        document.getElementById('queryInput').focus();
+    });
+});
+
+// Focus input on load
+window.addEventListener('load', function() {
+    const input = document.getElementById('queryInput');
+    if (input && !input.disabled) {
+        input.focus();
+    }
+});
+</script>
+{% endblock %}

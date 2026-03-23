@@ -4,13 +4,20 @@ import os
 import re
 import hashlib
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
-from ai_service import get_summary, get_insights
-from document_parser import allowed_file, extract_text, split_entries_by_date, validate_entries
+from services.ai_service import get_summary, get_insights
+from utils.document_parser import allowed_file, extract_text, split_entries_by_date, validate_entries
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from werkzeug.utils import secure_filename
+from services.rag_service import (
+    add_entry_to_vector_db, 
+    search_entries, 
+    chat_with_journal, 
+    delete_entry_from_vector_db,
+    get_collection_stats
+)
 
 # load .env from project root (python-dotenv)
 load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
@@ -119,15 +126,15 @@ TEST_USER = {
 }
 
 # JSON file paths (used in local mode)
-DATA_FILE = os.path.join(os.path.dirname(__file__), 'journal.json')
-USERS_FILE = os.path.join(os.path.dirname(__file__), 'users.json')
+DATA_FILE = os.path.join(os.path.dirname(__file__), 'data', 'journal.json')
+USERS_FILE = os.path.join(os.path.dirname(__file__), 'data', 'users.json')
 
 # ============================================
 # Database Setup (SQLAlchemy for deployed mode)
 # ============================================
 if IS_DEPLOYED:
     from flask_sqlalchemy import SQLAlchemy
-    from models import db as models_db, User, Entry, ResetToken
+    from models.models import db as models_db, User, Entry, ResetToken
     
     # Use SQLite on Fly.io (stored in /data/app.db which persists across restarts)
     db_path = '/data/app.db' if os.path.exists('/data') or True else 'app.db'
@@ -211,6 +218,43 @@ def save_users(users):
         json.dump(users, f, ensure_ascii=False, indent=2)
 
 
+def filter_entries_by_time_range(entries, time_range):
+    """Filter entries based on time range selection."""
+    if time_range == 'all':
+        return entries
+    
+    now = datetime.utcnow()
+    
+    # Calculate cutoff date based on time range
+    if time_range == '1week':
+        cutoff = now - timedelta(days=7)
+    elif time_range == '1month':
+        cutoff = now - timedelta(days=30)
+    elif time_range == '3months':
+        cutoff = now - timedelta(days=90)
+    elif time_range == '6months':
+        cutoff = now - timedelta(days=180)
+    elif time_range == '1year':
+        cutoff = now - timedelta(days=365)
+    else:
+        return entries  # Unknown range, return all
+    
+    # Filter entries by date
+    filtered = []
+    for entry in entries:
+        try:
+            entry_date_str = entry.get('date', '')
+            # Parse ISO format date
+            entry_date = datetime.fromisoformat(entry_date_str.replace('Z', ''))
+            if entry_date >= cutoff:
+                filtered.append(entry)
+        except (ValueError, AttributeError):
+            # If date parsing fails, include the entry
+            filtered.append(entry)
+    
+    return filtered
+
+
 def generate_reset_token():
     """Generate a unique reset token for password reset."""
     import uuid
@@ -250,6 +294,13 @@ def delete_entry(entry_id):
     entries = load_entries()
     entries = [e for e in entries if e.get('id') != entry_id]
     save_entries(entries)
+    
+    # Remove from vector database
+    try:
+        delete_entry_from_vector_db(str(entry_id))
+    except Exception as e:
+        print(f"Error deleting entry from vector DB: {e}")
+    
     return redirect(url_for('index'))
 
 
@@ -263,6 +314,14 @@ def delete_bulk():
         ids = set(int(x) for x in selected)
     except Exception:
         ids = set()
+    
+    # Remove from vector database
+    for entry_id in ids:
+        try:
+            delete_entry_from_vector_db(str(entry_id))
+        except Exception as e:
+            print(f"Error deleting entry {entry_id} from vector DB: {e}")
+    
     entries = load_entries()
     entries = [e for e in entries if e.get('id') not in ids]
     save_entries(entries)
@@ -369,6 +428,19 @@ def new_entry():
             }
             entries.append(entry)
             save_entries(entries)
+            
+            # Add to vector database for RAG
+            try:
+                full_content = f"{title}\n\n{content}" if title else content
+                add_entry_to_vector_db(
+                    entry_id=str(entry['id']),
+                    content=full_content,
+                    date=created_at
+                )
+            except Exception as e:
+                # Log error but don't fail the entry creation
+                print(f"Error adding entry to vector DB: {e}")
+            
         # set a session flag so the UI can show a saved modal once
         session['saved'] = True
         return redirect(url_for('index'))
@@ -692,6 +764,17 @@ def review_upload():
                         'created_at': f"{entry_data['date']}T00:00:00Z"
                     }
                     entries.append(entry)
+                    
+                    # Add to vector database
+                    try:
+                        full_content = f"{entry['title']}\n\n{entry['content']}" if entry['title'] else entry['content']
+                        add_entry_to_vector_db(
+                            entry_id=str(entry['id']),
+                            content=full_content,
+                            date=entry['created_at']
+                        )
+                    except Exception as e:
+                        print(f"Error adding bulk entry to vector DB: {e}")
                 
                 save_entries(entries)
                 
@@ -711,6 +794,217 @@ def review_upload():
     return render_template('review_upload.html', entries=pending_entries, errors=errors)
 
 
+@app.route('/chat', methods=['GET', 'POST'])
+@limiter.limit("30 per minute")
+def chat():
+    """Journal chat interface using RAG with auto-migration."""
+    if not session.get('user'):
+        return redirect(url_for('login'))
+    
+    # Check if auto-migration is needed
+    stats = get_collection_stats()
+    entries = load_entries()
+    total_entries = len(entries)
+    indexed_entries = stats.get('total_entries', 0)
+    
+    # Auto-migrate if vector DB is empty or has fewer entries than journal
+    if indexed_entries < total_entries:
+        # Redirect to auto-migration
+        return redirect(url_for('auto_migrate'))
+    
+    # Get or initialize chat history in session
+    if 'chat_history' not in session:
+        session['chat_history'] = []
+    
+    # Get time range filter from request
+    time_range = request.args.get('time_range', 'all')
+    
+    if request.method == 'POST':
+        query = request.form.get('query', '').strip()
+        time_range = request.form.get('time_range', 'all')
+        
+        if not query:
+            return render_template('chat.html', 
+                                 messages=session['chat_history'], 
+                                 stats=stats,
+                                 time_range=time_range,
+                                 error="Please enter a question")
+        
+        try:
+            # Search for relevant entries
+            relevant_entries = search_entries(query, n_results=5)
+            
+            # Filter by time range if specified
+            if time_range != 'all':
+                relevant_entries = filter_entries_by_time_range(relevant_entries, time_range)
+            
+            # Generate AI response
+            response = chat_with_journal(query, relevant_entries)
+            
+            # Add to chat history
+            timestamp = datetime.utcnow().strftime('%I:%M %p')
+            
+            session['chat_history'].append({
+                'role': 'user',
+                'content': query,
+                'timestamp': timestamp,
+                'time_range': time_range
+            })
+            
+            session['chat_history'].append({
+                'role': 'assistant',
+                'content': response,
+                'timestamp': timestamp,
+                'entries': relevant_entries,
+                'time_range': time_range
+            })
+            
+            # Keep only last 20 messages (10 exchanges)
+            if len(session['chat_history']) > 20:
+                session['chat_history'] = session['chat_history'][-20:]
+            
+            session.modified = True
+            
+        except Exception as e:
+            return render_template('chat.html', 
+                                 messages=session['chat_history'], 
+                                 stats=stats,
+                                 time_range=time_range,
+                                 error=f"Error processing your question. Please try again.")
+    
+    return render_template('chat.html', messages=session['chat_history'], stats=stats, time_range=time_range)
+
+
+@app.route('/chat/clear', methods=['POST'])
+def clear_chat():
+    """Clear chat history."""
+    if not session.get('user'):
+        return redirect(url_for('login'))
+    
+    session['chat_history'] = []
+    session.modified = True
+    return redirect(url_for('chat'))
+
+
+@app.route('/auto-migrate')
+def auto_migrate():
+    """Auto-migration page with progress indicator."""
+    if not session.get('user'):
+        return redirect(url_for('login'))
+    
+    # Get stats
+    stats = get_collection_stats()
+    entries = load_entries()
+    total_entries = len(entries)
+    indexed_entries = stats.get('total_entries', 0)
+    needs_migration = indexed_entries < total_entries
+    
+    return render_template('auto_migrate.html', 
+                         total_entries=total_entries,
+                         indexed_entries=indexed_entries,
+                         needs_migration=needs_migration)
+
+
+@app.route('/api/migrate-progress', methods=['POST'])
+@limiter.limit("10 per hour")
+def migrate_progress():
+    """API endpoint to perform migration and return progress."""
+    if not session.get('user'):
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    try:
+        entries = load_entries()
+        stats = get_collection_stats()
+        indexed_entries = stats.get('total_entries', 0)
+        
+        # Only migrate entries that aren't indexed yet
+        success_count = 0
+        error_count = 0
+        
+        for entry in entries:
+            entry_id = str(entry.get('id'))
+            content = entry.get('content', '')
+            title = entry.get('title', '')
+            date = entry.get('created_at', '')
+            
+            if content:
+                try:
+                    full_content = f"{title}\n\n{content}" if title else content
+                    result = add_entry_to_vector_db(
+                        entry_id=entry_id,
+                        content=full_content,
+                        date=date
+                    )
+                    if result:
+                        success_count += 1
+                    else:
+                        error_count += 1
+                except Exception as e:
+                    print(f"Error migrating entry {entry_id}: {e}")
+                    error_count += 1
+        
+        return jsonify({
+            'success': True,
+            'success_count': success_count,
+            'error_count': error_count,
+            'total': len(entries)
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/migrate', methods=['GET', 'POST'])
+@limiter.limit("5 per hour")
+def migrate_entries():
+    """Migrate existing entries to vector database."""
+    if not session.get('user'):
+        return redirect(url_for('login'))
+    
+    if request.method == 'POST':
+        try:
+            entries = load_entries()
+            
+            success_count = 0
+            error_count = 0
+            
+            for entry in entries:
+                entry_id = str(entry.get('id'))
+                content = entry.get('content', '')
+                date = entry.get('entry_date', entry.get('created_at', ''))
+                
+                if content:
+                    result = add_entry_to_vector_db(
+                        entry_id=entry_id,
+                        content=content,
+                        date=date
+                    )
+                    if result:
+                        success_count += 1
+                    else:
+                        error_count += 1
+            
+            stats = get_collection_stats()
+            
+            return render_template('migrate.html', 
+                                 success=True,
+                                 success_count=success_count,
+                                 error_count=error_count,
+                                 stats=stats)
+            
+        except Exception as e:
+            return render_template('migrate.html', 
+                                 error="An error occurred during migration. Please try again.")
+    
+    # GET request - show migration page
+    stats = get_collection_stats()
+    entries = load_entries()
+    
+    return render_template('migrate.html', 
+                         stats=stats,
+                         total_entries=len(entries))
+
+
 @app.route('/logout')
 def logout():
     session.pop('user', None)
@@ -720,3 +1014,4 @@ def logout():
 
 if __name__ == '__main__':
     app.run(debug=True)
+

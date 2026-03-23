@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 """Quick test script to debug document parsing."""
 
-from document_parser import parse_date, split_entries_by_date, validate_entries
+import os
+import sys
+
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+from utils.document_parser import parse_date, split_entries_by_date, validate_entries
 
 # Test date parsing
 test_dates = [
