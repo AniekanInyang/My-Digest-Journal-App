@@ -1,7 +1,7 @@
 # My-Digest-Journal-App
 Personal journal web app with AI-powered summaries, insights, and semantic search
 
-## ✨ New in Phase 1: RAG Integration
+## ✨ New in v1: RAG Integration and Topic Classification
 
 **Ask My Journal** - Chat with your journal using natural language! Phase 1 adds:
 - 💬 Semantic search across all entries
